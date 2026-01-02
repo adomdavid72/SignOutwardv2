@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Purple Palette -->
+    <color name="purple_primary">#FF7C3AED</color>
+    <color name="purple_primary_dark">#FF5B21B6</color>
+    <color name="purple_primary_light">#FFA78BFA</color>
+    <color name="purple_accent">#FF8B5CF6</color>
+    
+    <!-- Surface Colors -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="off_white">#FFFAF5FF</color>
+    <color name="surface_light">#FFF5F3FF</color>
+    <color name="surface_medium">#FFEDE9FE</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#FF1F2937</color>
+    <color name="text_secondary">#FF6B7280</color>
+    <color name="text_on_purple">#FFFFFFFF</color>
+    
+    <!-- Legacy/System -->
+    <color name="black">#FF000000</color>
+    
+    <!-- Launcher icon colors -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

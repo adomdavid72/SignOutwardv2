@@ -1,0 +1,118 @@
+package com.example.signoutwardv2.integration
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.signoutwardv2.data.DevicePreferences
+import com.example.signoutwardv2.data.SupabaseClient
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Integration tests for Supabase pairing
+ * Tests: Device pairing → screens.is_paired = true
+ * 
+ * NOTE: These tests require a valid Supabase connection and test data
+ * For CI/CD, use test fixtures or mock Supabase responses
+ */
+@RunWith(AndroidJUnit4::class)
+class SupabasePairingTest {
+    
+    private lateinit var context: Context
+    private lateinit var preferences: DevicePreferences
+    
+    @Before
+    fun setup() = runBlocking {
+        context = ApplicationProvider.getApplicationContext()
+        preferences = DevicePreferences(context)
+        
+        // Clear any existing pairing state
+        preferences.clearAll()
+    }
+    
+    @Test
+    fun `validatePairingCode updates screens_is_paired when successful`() = runBlocking {
+        // This test requires a valid pairing code in Supabase
+        // Replace "TESTCODE" with an actual unused pairing code from your test database
+        val testCode = "TESTCODE" // TODO: Replace with actual test code
+        
+        val result = SupabaseClient.validatePairingCode(testCode)
+        
+        result.fold(
+            onSuccess = { response ->
+                if (response.success && response.screenId != null) {
+                    // Verify screen ID is saved locally
+                    val savedScreenId = preferences.screenId.first()
+                    assertEquals("Screen ID should be saved", response.screenId, savedScreenId)
+                    
+                    // Verify paired status is saved
+                    val isPaired = preferences.isPaired.first()
+                    assertTrue("Device should be marked as paired", isPaired)
+                    
+                    // Note: We can't directly verify Supabase DB state here without
+                    // making another API call, but the pairing response indicates success
+                } else {
+                    // If test code doesn't exist, skip test
+                    org.junit.Assume.assumeTrue(
+                        "Test code not available or already used",
+                        false
+                    )
+                }
+            },
+            onFailure = { exception ->
+                // Network errors are acceptable in test environment
+                org.junit.Assume.assumeNoException(
+                    "Supabase connection failed - skipping test",
+                    exception
+                )
+            }
+        )
+    }
+    
+    @Test
+    fun `validatePairingCode fails for invalid code`() = runBlocking {
+        val invalidCode = "INVALID"
+        
+        val result = SupabaseClient.validatePairingCode(invalidCode)
+        
+        result.fold(
+            onSuccess = { response ->
+                assertFalse("Invalid code should fail", response.success)
+                assertNull("Screen ID should be null for failed pairing", response.screenId)
+            },
+            onFailure = { exception ->
+                // Network errors are acceptable
+                org.junit.Assume.assumeNoException(
+                    "Supabase connection failed - skipping test",
+                    exception
+                )
+            }
+        )
+    }
+    
+    @Test
+    fun `validatePairingCode fails for already used code`() = runBlocking {
+        // This test requires a pairing code that has already been used
+        // Replace with an actual used code from your test database
+        val usedCode = "USEDCODE" // TODO: Replace with actual used code
+        
+        val result = SupabaseClient.validatePairingCode(usedCode)
+        
+        result.fold(
+            onSuccess = { response ->
+                assertFalse("Used code should fail", response.success)
+            },
+            onFailure = { exception ->
+                org.junit.Assume.assumeNoException(
+                    "Supabase connection failed - skipping test",
+                    exception
+                )
+            }
+        )
+    }
+}
+

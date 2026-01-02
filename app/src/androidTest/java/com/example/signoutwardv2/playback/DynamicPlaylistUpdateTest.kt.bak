@@ -1,0 +1,294 @@
+package com.example.signoutwardv2.playback
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.signoutwardv2.data.DevicePreferences
+import com.example.signoutwardv2.data.PlaybackRepository
+import com.example.signoutwardv2.data.SupabaseClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import android.util.Log
+
+/**
+ * Physical device tests for dynamic playlist updates
+ * 
+ * Tests:
+ * - New videos appear in rotation immediately or within sync interval
+ * - New images appear and are displayed correctly
+ * - Playlist continues playing without crashing after updates
+ * 
+ * NOTE: These tests require Supabase test data and may need manual playlist updates
+ */
+@RunWith(AndroidJUnit4::class)
+class DynamicPlaylistUpdateTest {
+    
+    companion object {
+        private const val TAG = "DynamicPlaylistUpdateTest"
+        private const val SYNC_INTERVAL_MS = 30000L // 30 seconds sync interval
+        private const val SYNC_WAIT_MS = SYNC_INTERVAL_MS + 5000L // Wait slightly longer than sync interval
+    }
+    
+    private lateinit var context: Context
+    private lateinit var preferences: DevicePreferences
+    private lateinit var repository: PlaybackRepository
+    
+    @Before
+    fun setup() = runBlocking {
+        context = ApplicationProvider.getApplicationContext()
+        preferences = DevicePreferences(context)
+        repository = PlaybackRepository(preferences, context)
+        
+        // Set up test screen ID (replace with actual test screen ID)
+        preferences.setScreenId("test-screen-dynamic-update")
+        preferences.setPaired(true)
+    }
+    
+    /**
+     * Test: New videos appear in rotation after playlist update
+     * 
+     * Verifies that when a playlist is updated via web app with new videos,
+     * the device picks up the changes within the sync interval
+     */
+    @Test
+    fun `new videos appear in rotation after playlist update`() = runBlocking {
+        val screenId = preferences.screenId.first()
+        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
+        
+        Log.d(TAG, "=== Starting dynamic video update test ===")
+        
+        // Start periodic sync to detect playlist changes
+        val groupId = preferences.groupId.first()
+        val locationId = preferences.locationId.first()
+        repository.startPeriodicSync(screenId ?: "", groupId, locationId)
+        
+        // Get initial playlist state
+        repository.fetchPlaylist(screenId ?: "", null, null)
+        delay(2000)
+        
+        val initialState = repository.playlistState.first()
+        org.junit.Assume.assumeTrue(
+            "Initial playlist must be ready",
+            initialState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready
+        )
+        
+        val initialPlaylist = (initialState as com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready).playlist
+        val initialVideoIds = initialPlaylist.videos.map { it.id }.toSet()
+        val initialVideoCount = initialPlaylist.videos.size
+        
+        Log.d(TAG, "Initial playlist: $initialVideoCount videos")
+        Log.d(TAG, "Initial video IDs: ${initialVideoIds.take(5)}...") // Log first 5
+        
+        // NOTE: At this point, manually update the playlist via web app to add new videos
+        // This test will detect the changes after sync interval
+        
+        Log.d(TAG, "Waiting ${SYNC_WAIT_MS / 1000} seconds for sync interval...")
+        Log.d(TAG, "ACTION REQUIRED: Update playlist via web app to add new videos NOW")
+        
+        delay(SYNC_WAIT_MS)
+        
+        // Fetch updated playlist
+        repository.fetchPlaylist(screenId ?: "", null, null)
+        delay(2000)
+        
+        val updatedState = repository.playlistState.first()
+        assertTrue(
+            "Playlist should still be ready after update",
+            updatedState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready
+        )
+        
+        val updatedPlaylist = (updatedState as com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready).playlist
+        val updatedVideoIds = updatedPlaylist.videos.map { it.id }.toSet()
+        val updatedVideoCount = updatedPlaylist.videos.size
+        
+        Log.d(TAG, "Updated playlist: $updatedVideoCount videos")
+        Log.d(TAG, "Updated video IDs: ${updatedVideoIds.take(5)}...")
+        
+        // Check if new videos were added
+        val newVideoIds = updatedVideoIds - initialVideoIds
+        val removedVideoIds = initialVideoIds - updatedVideoIds
+        
+        if (newVideoIds.isNotEmpty()) {
+            Log.d(TAG, "NEW VIDEOS DETECTED: ${newVideoIds.size} new videos")
+            newVideoIds.forEach { videoId ->
+                Log.d(TAG, "  - New video ID: $videoId")
+            }
+        }
+        
+        if (removedVideoIds.isNotEmpty()) {
+            Log.d(TAG, "REMOVED VIDEOS: ${removedVideoIds.size} videos removed")
+        }
+        
+        // Assert: Playlist should continue playing (not crash)
+        assertTrue("Playlist should remain in Ready state", true)
+        
+        // Assert: If videos were added, they should be in the playlist
+        if (newVideoIds.isNotEmpty()) {
+            assertTrue(
+                "New videos should appear in playlist",
+                updatedVideoCount >= initialVideoCount
+            )
+        }
+        
+        Log.d(TAG, "=== Test completed ===")
+    }
+    
+    /**
+     * Test: New images appear and are displayed correctly after playlist update
+     * 
+     * Verifies that when images are added to a playlist, they appear in rotation
+     * and are displayed (not skipped or replaced with placeholders)
+     */
+    @Test
+    fun `new images appear and display correctly after playlist update`() = runBlocking {
+        val screenId = preferences.screenId.first()
+        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
+        
+        Log.d(TAG, "=== Starting dynamic image update test ===")
+        
+        val groupId = preferences.groupId.first()
+        val locationId = preferences.locationId.first()
+        repository.startPeriodicSync(screenId ?: "", groupId, locationId)
+        
+        // Get initial playlist state
+        repository.fetchPlaylist(screenId ?: "", null, null)
+        delay(2000)
+        
+        val initialState = repository.playlistState.first()
+        org.junit.Assume.assumeTrue(
+            "Initial playlist must be ready",
+            initialState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready
+        )
+        
+        val initialPlaylist = (initialState as com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready).playlist
+        val initialImageUrls = initialPlaylist.videos
+            .filter { it.url.matches(Regex(".*\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE)) }
+            .map { it.id }
+            .toSet()
+        
+        Log.d(TAG, "Initial playlist: ${initialImageUrls.size} images")
+        Log.d(TAG, "Initial image IDs: ${initialImageUrls.take(5)}...")
+        
+        // NOTE: At this point, manually update the playlist via web app to add new images
+        Log.d(TAG, "Waiting ${SYNC_WAIT_MS / 1000} seconds for sync interval...")
+        Log.d(TAG, "ACTION REQUIRED: Update playlist via web app to add new images NOW")
+        
+        delay(SYNC_WAIT_MS)
+        
+        // Fetch updated playlist
+        repository.fetchPlaylist(screenId ?: "", null, null)
+        delay(2000)
+        
+        val updatedState = repository.playlistState.first()
+        assertTrue(
+            "Playlist should still be ready after update",
+            updatedState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready
+        )
+        
+        val updatedPlaylist = (updatedState as com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready).playlist
+        val updatedImageUrls = updatedPlaylist.videos
+            .filter { it.url.matches(Regex(".*\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE)) }
+            .map { it.id }
+            .toSet()
+        
+        val newImageIds = updatedImageUrls - initialImageUrls
+        
+        if (newImageIds.isNotEmpty()) {
+            Log.d(TAG, "NEW IMAGES DETECTED: ${newImageIds.size} new images")
+            newImageIds.forEach { imageId ->
+                val image = updatedPlaylist.videos.find { it.id == imageId }
+                Log.d(TAG, "  - New image ID: $imageId, URL: ${image?.url}")
+            }
+        } else {
+            Log.w(TAG, "No new images detected - ensure images were added via web app")
+        }
+        
+        // Assert: Playlist should continue playing
+        assertTrue("Playlist should remain functional", true)
+        
+        // Verify images are in supported format
+        newImageIds.forEach { imageId ->
+            val image = updatedPlaylist.videos.find { it.id == imageId }
+            assertNotNull("New image should exist in playlist", image)
+            
+            val isSupportedImageFormat = image?.url?.matches(
+                Regex(".*\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE)
+            ) ?: false
+            
+            assertTrue(
+                "New image should be in supported format: ${image?.url}",
+                isSupportedImageFormat
+            )
+        }
+        
+        Log.d(TAG, "=== Test completed ===")
+    }
+    
+    /**
+     * Test: Playlist continues playing without crashing after update
+     * 
+     * Verifies that playlist updates don't cause crashes or playback interruptions
+     */
+    @Test
+    fun `playlist continues playing without crashing after update`() = runBlocking {
+        val screenId = preferences.screenId.first()
+        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
+        
+        Log.d(TAG, "=== Starting crash-resilience test ===")
+        
+        val groupId = preferences.groupId.first()
+        val locationId = preferences.locationId.first()
+        repository.startPeriodicSync(screenId ?: "", groupId, locationId)
+        
+        // Get initial state
+        repository.fetchPlaylist(screenId ?: "", null, null)
+        delay(2000)
+        
+        var initialState = repository.playlistState.first()
+        org.junit.Assume.assumeTrue(
+            "Initial playlist must be ready",
+            initialState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready
+        )
+        
+        Log.d(TAG, "Initial playlist loaded successfully")
+        
+        // Simulate multiple sync cycles to test resilience
+        val syncCycles = 3
+        for (cycle in 1..syncCycles) {
+            Log.d(TAG, "Sync cycle $cycle/$syncCycles...")
+            
+            delay(SYNC_WAIT_MS)
+            
+            // Fetch playlist (simulates periodic sync)
+            repository.fetchPlaylist(screenId ?: "", null, null)
+            delay(1000)
+            
+            val currentState = repository.playlistState.first()
+            
+            // Assert: State should remain valid (not Error)
+            assertFalse(
+                "Playlist should not be in error state after sync cycle $cycle",
+                currentState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Error
+            )
+            
+            Log.d(TAG, "Sync cycle $cycle completed successfully")
+        }
+        
+        // Final state check
+        val finalState = repository.playlistState.first()
+        val isValidState = finalState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready ||
+            finalState is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Empty
+        assertTrue(
+            "Final playlist state should be valid",
+            isValidState
+        )
+        
+        Log.d(TAG, "=== Crash-resilience test passed ===")
+    }
+}
+

@@ -1,0 +1,98 @@
+package com.example.signoutwardv2.integration
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.signoutwardv2.data.DevicePreferences
+import com.example.signoutwardv2.data.PlaybackRepository
+import com.example.signoutwardv2.data.SupabaseClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Integration tests for playlist sync
+ * Tests: Playlist change → new assets queued for download
+ */
+@RunWith(AndroidJUnit4::class)
+class PlaylistSyncTest {
+    
+    private lateinit var context: Context
+    private lateinit var preferences: DevicePreferences
+    private lateinit var repository: PlaybackRepository
+    
+    @Before
+    fun setup() = runBlocking {
+        context = ApplicationProvider.getApplicationContext()
+        preferences = DevicePreferences(context)
+        repository = PlaybackRepository(preferences, context)
+        
+        // Set up test screen ID (replace with actual test screen ID)
+        preferences.setScreenId("test-screen-id") // TODO: Replace with actual test screen ID
+        preferences.setPaired(true)
+    }
+    
+    @Test
+    fun `playlist sync fetches active playlist`() = runBlocking {
+        val screenId = preferences.screenId.first()
+        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
+        
+        // Fetch playlist
+        val groupId = preferences.groupId.first()
+        val locationId = preferences.locationId.first()
+        val result = SupabaseClient.getActivePlaylistWithVideos(
+            screenId = screenId ?: "",
+            groupId = groupId,
+            locationId = locationId
+        )
+        
+        result.fold(
+            onSuccess = { playlist ->
+                // Playlist may be null if no active playlist exists
+                // This is valid - just verify the call succeeded
+                assertNotNull("Playlist fetch should succeed", playlist)
+                
+                if (playlist != null) {
+                    assertTrue("Playlist should have videos", playlist.videos.isNotEmpty())
+                    assertNotNull("Playlist should have ID", playlist.playlist.id)
+                }
+            },
+            onFailure = { exception ->
+                org.junit.Assume.assumeNoException(
+                    "Supabase connection failed - skipping test",
+                    exception
+                )
+            }
+        )
+    }
+    
+    @Test
+    fun `playlist state updates when playlist changes`() = runBlocking {
+        val screenId = preferences.screenId.first()
+        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
+        
+        // Start repository sync
+        val groupId = preferences.groupId.first()
+        val locationId = preferences.locationId.first()
+        repository.startPeriodicSync(screenId ?: "", groupId, locationId)
+        
+        // Wait for initial load
+        delay(2000)
+        
+        val state = repository.playlistState.first()
+        
+        // State should be one of: Loading, Empty, Ready, or Error
+        assertNotNull("Playlist state should not be null", state)
+        
+        // If Ready, verify playlist is loaded
+        if (state is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready) {
+            assertNotNull("Playlist should be loaded", state.playlist)
+            assertTrue("Playlist should have videos", state.playlist.videos.isNotEmpty())
+        }
+    }
+}
+

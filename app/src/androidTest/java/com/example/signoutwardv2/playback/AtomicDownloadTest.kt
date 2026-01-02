@@ -1,0 +1,214 @@
+package com.example.signoutwardv2.playback
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.signoutwardv2.cache.CacheManager
+import com.example.signoutwardv2.cache.CacheStateManager
+import com.example.signoutwardv2.cache.CacheStatus
+import com.example.signoutwardv2.cache.DownloadManager
+import com.example.signoutwardv2.data.models.Video
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+/**
+ * Tests for atomic downloads
+ * Enforces: Download to temp file → rename only after completion → playback allowed only after rename
+ */
+@RunWith(AndroidJUnit4::class)
+class AtomicDownloadTest {
+    
+    private lateinit var context: Context
+    private lateinit var cacheManager: CacheManager
+    private lateinit var stateManager: CacheStateManager
+    private lateinit var downloadManager: DownloadManager
+    
+    @Before
+    fun setup() {
+        context = ApplicationProvider.getApplicationContext()
+        stateManager = CacheStateManager(context)
+        cacheManager = CacheManager(context, stateManager)
+        downloadManager = DownloadManager(context, cacheManager, stateManager, "test-screen")
+        
+        // Clear cache
+        cacheManager.clearAllCache()
+    }
+    
+        // Test: download status prevents playback during download
+    @Test
+    fun downloadStatusPreventsPlaybackDuringDownload() {
+        runBlocking {
+        val playlistId = "test-playlist"
+        val videoId = "test-video"
+        val url = "https://example.com/video.mp4"
+        
+        // Set status to DOWNLOADING
+        stateManager.updateCacheStatus(
+            screenId = "test-screen",
+            playlistId = playlistId,
+            videoId = videoId,
+            status = CacheStatus.DOWNLOADING,
+            url = url
+        )
+        
+        // Verify cache URI is not available
+        val cachedUri = cacheManager.getCachedUri(playlistId, videoId, url)
+        assertNull(
+            "Should not return URI during DOWNLOADING (atomic download enforcement)",
+            cachedUri
+        )
+        
+        // Verify isCached returns false
+        val isCached = cacheManager.isCached(playlistId, videoId, url)
+        assertFalse("Should not be cached during download", isCached)
+        }
+    }
+    
+        // Test: cache status is COMPLETED only after validation
+    @Test
+    fun cacheStatusIsCompletedOnlyAfterValidation() {
+        runBlocking {
+        val playlistId = "test-playlist"
+        val videoId = "test-video"
+        val url = "https://example.com/video.mp4"
+        
+        // Create a valid file
+        val cacheFile = cacheManager.getCachePath(playlistId, videoId, url)
+        cacheFile.parentFile?.mkdirs()
+        cacheFile.writeBytes(ByteArray(1024))
+        
+        // Mark as COMPLETED with validation
+        stateManager.updateCacheStatus(
+            screenId = "test-screen",
+            playlistId = playlistId,
+            videoId = videoId,
+            status = CacheStatus.COMPLETED,
+            localFilePath = cacheFile.absolutePath,
+            actualFileSize = 1024L,
+            url = url
+        )
+        
+        // Verify status is COMPLETED
+        val status = cacheManager.getCacheStatus(playlistId, videoId)
+        assertEquals("Status should be COMPLETED", CacheStatus.COMPLETED, status)
+        
+        // Verify URI is available
+        val cachedUri = cacheManager.getCachedUri(playlistId, videoId, url)
+        assertNotNull("Should return URI when COMPLETED", cachedUri)
+        }
+    }
+    
+        // Test: single download enforcement prevents duplicate downloads
+    @Test
+    fun singleDownloadEnforcementPreventsDuplicateDownloads() {
+        runBlocking {
+        val playlistId = "test-playlist"
+        val video = Video(
+            id = "test-video",
+            url = "https://example.com/video.mp4",
+            name = "Test Video"
+        )
+        
+        // Mark as COMPLETED
+        stateManager.updateCacheStatus(
+            screenId = "test-screen",
+            playlistId = playlistId,
+            videoId = video.id,
+            status = CacheStatus.COMPLETED,
+            url = video.url
+        )
+        
+        // Try to download again - should be skipped
+        downloadManager.downloadVideo(video, playlistId)
+        
+        // Wait a moment
+        delay(100)
+        
+        // Status should still be COMPLETED (not DOWNLOADING)
+        val status = cacheManager.getCacheStatus(playlistId, video.id)
+        assertEquals(
+            "Status should remain COMPLETED (single download enforcement)",
+            CacheStatus.COMPLETED,
+            status
+        )
+        }
+    }
+    
+        // Test: download does not start if already DOWNLOADING
+    @Test
+    fun downloadDoesNotStartIfAlreadyDownloading() {
+        runBlocking {
+        val playlistId = "test-playlist"
+        val video = Video(
+            id = "test-video",
+            url = "https://example.com/video.mp4",
+            name = "Test Video"
+        )
+        
+        // Mark as DOWNLOADING
+        stateManager.updateCacheStatus(
+            screenId = "test-screen",
+            playlistId = playlistId,
+            videoId = video.id,
+            status = CacheStatus.DOWNLOADING,
+            url = video.url
+        )
+        
+        // Try to download again - should be skipped
+        downloadManager.downloadVideo(video, playlistId)
+        
+        // Wait a moment
+        delay(100)
+        
+        // Status should still be DOWNLOADING (not start new download)
+        val status = cacheManager.getCacheStatus(playlistId, video.id)
+        assertEquals(
+            "Status should remain DOWNLOADING (prevent duplicate downloads)",
+            CacheStatus.DOWNLOADING,
+            status
+        )
+        }
+    }
+    
+        // Test: failed downloads can be retried
+    @Test
+    fun failedDownloadsCanBeRetried() {
+        runBlocking {
+        val playlistId = "test-playlist"
+        val video = Video(
+            id = "test-video",
+            url = "https://example.com/video.mp4",
+            name = "Test Video"
+        )
+        
+        // Mark as FAILED
+        stateManager.updateCacheStatus(
+            screenId = "test-screen",
+            playlistId = playlistId,
+            videoId = video.id,
+            status = CacheStatus.FAILED,
+            url = video.url
+        )
+        
+        // Try to download - should be allowed (retry)
+        downloadManager.downloadVideo(video, playlistId)
+        
+        // Wait a moment
+        delay(100)
+        
+        // Status should change to DOWNLOADING (retry started)
+        val status = cacheManager.getCacheStatus(playlistId, video.id)
+        assertEquals(
+            "Status should be DOWNLOADING (retry allowed for FAILED)",
+            CacheStatus.DOWNLOADING,
+            status
+        )
+        }
+    }
+}
+
