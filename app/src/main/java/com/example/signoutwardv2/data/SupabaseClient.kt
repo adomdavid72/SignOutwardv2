@@ -665,4 +665,43 @@ object SupabaseClient {
     suspend fun updateLastSync(screenId: String): Result<Unit> {
         return sendHeartbeat(screenId)
     }
+    
+    // ========================================================================
+    // 8. VISITOR COUNTS
+    // ========================================================================
+    // Table: visitor_counts
+    // 
+    // Stores hourly visitor counts per device
+    // ========================================================================
+    
+    /**
+     * Upload visitor count to Supabase
+     * 
+     * @param visitorCount VisitorCount object with device_id, timestamp, and count
+     * @return Result indicating success or failure
+     */
+    suspend fun uploadVisitorCount(visitorCount: com.example.signoutwardv2.data.models.VisitorCount): Result<Unit> {
+        return try {
+            Log.d(TAG, "Uploading visitor count: device=${visitorCount.deviceId}, timestamp=${visitorCount.timestamp}, count=${visitorCount.count}")
+            
+            val response = client.post("$supabaseUrl/rest/v1/visitor_counts") {
+                setBody(visitorCount)
+            }
+            
+            when (response.status.value) {
+                in 200..299 -> {
+                    Log.d(TAG, "Visitor count uploaded successfully")
+                    Result.success(Unit)
+                }
+                else -> {
+                    val errorBody = response.bodyAsText()
+                    Log.e(TAG, "Failed to upload visitor count: ${response.status} - $errorBody")
+                    Result.failure(Exception("Upload failed: ${response.status} - $errorBody"))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error uploading visitor count", e)
+            Result.failure(e)
+        }
+    }
 }

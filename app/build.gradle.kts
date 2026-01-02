@@ -79,6 +79,23 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     
+    // CameraX for camera access
+    val cameraxVersion = "1.3.1"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    
+    // ML Kit for person detection (better Android integration than MediaPipe)
+    implementation("com.google.mlkit:object-detection:17.0.1")
+    
+    // Permissions handling
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+    
+    // WorkManager for scheduled tasks
+    val workManagerVersion = "2.9.0"
+    implementation("androidx.work:work-runtime-ktx:$workManagerVersion")
+    
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito:mockito-inline:5.2.0")

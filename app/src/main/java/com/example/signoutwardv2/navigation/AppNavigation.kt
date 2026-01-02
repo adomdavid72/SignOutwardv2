@@ -35,6 +35,7 @@ sealed class Screen(val route: String) {
             if (screenId != null) "ad_streaming?screenId=$screenId" 
             else "ad_streaming"
     }
+    object VisitorCounter : Screen("visitor_counter")
 }
 
 @Composable
@@ -131,6 +132,10 @@ fun AppNavigation(
         ) { backStackEntry ->
             val screenId = backStackEntry.arguments?.getString("screenId")
             AdStreamingScreen(screenId = screenId)
+        }
+        
+        composable(Screen.VisitorCounter.route) {
+            VisitorCounterScreen()
         }
     }
 }

@@ -182,6 +182,27 @@ data class PlaybackLog(
 )
 
 /**
+ * TABLE: visitor_counts
+ * 
+ * Stores hourly visitor counts per device
+ * 
+ * Example row:
+ * {
+ *   "id": "uuid",
+ *   "device_id": "android_device_id",
+ *   "timestamp": "2024-01-01T12:00:00Z",
+ *   "count": 42
+ * }
+ */
+@Serializable
+data class VisitorCount(
+    val id: String? = null,
+    @SerialName("device_id") val deviceId: String,
+    val timestamp: String, // ISO 8601 timestamp (start of hour)
+    val count: Int
+)
+
+/**
  * TABLE: device_analytics
  * 
  * Daily aggregated analytics per screen
