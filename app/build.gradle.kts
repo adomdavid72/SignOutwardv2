@@ -52,6 +52,13 @@ android {
     // This is configured via gradle.properties: android.enableDexingArtifactTransform.desugaring=false
     // and by setting the test variant's minSdk through the packaging block
     testBuildType = "debug"
+    
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = false
+        }
+    }
 }
 
 dependencies {

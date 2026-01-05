@@ -256,5 +256,51 @@ class MixedMediaPlaybackDeterministicTest {
             Log.d(TAG, "✓ Empty URLs correctly filtered to unsupported")
         }
     }
+    
+    /**
+     * Test: Video → Image → Video order renders correctly
+     * 
+     * Deterministic test that verifies the exact playback order
+     * for mixed media playlists. This ensures the state machine
+     * correctly handles transitions between video and image items.
+     */
+    @Test
+    fun videoImageVideoOrderRendersCorrectly() {
+        runBlocking {
+            Log.d(TAG, "=== Starting video → image → video order test ===")
+            
+            val playlist = TestMediaRepository.getMixedMediaPlaylist()
+            val processed = PlaylistProcessor.processPlaylist(playlist)
+            
+            // Verify exact order: VIDEO → IMAGE → VIDEO → IMAGE
+            val mediaSequence = processed.supportedVideos.map { video ->
+                MediaTypeDetector.detectMediaType(video.url, video.mimeType)
+            }
+            
+            Log.d(TAG, "Media sequence: ${mediaSequence.map { it.name }}")
+            
+            // Assert exact order
+            assertEquals("First item should be VIDEO", com.example.signoutwardv2.data.MediaType.VIDEO, mediaSequence[0])
+            assertEquals("Second item should be IMAGE", com.example.signoutwardv2.data.MediaType.IMAGE, mediaSequence[1])
+            assertEquals("Third item should be VIDEO", com.example.signoutwardv2.data.MediaType.VIDEO, mediaSequence[2])
+            assertEquals("Fourth item should be IMAGE", com.example.signoutwardv2.data.MediaType.IMAGE, mediaSequence[3])
+            
+            // Verify all items are in correct positions
+            val expectedOrder = listOf(
+                com.example.signoutwardv2.data.MediaType.VIDEO,
+                com.example.signoutwardv2.data.MediaType.IMAGE,
+                com.example.signoutwardv2.data.MediaType.VIDEO,
+                com.example.signoutwardv2.data.MediaType.IMAGE
+            )
+            
+            assertEquals(
+                "Playback order should match expected sequence",
+                expectedOrder,
+                mediaSequence
+            )
+            
+            Log.d(TAG, "✓ Video → Image → Video → Image order verified")
+        }
+    }
 }
 

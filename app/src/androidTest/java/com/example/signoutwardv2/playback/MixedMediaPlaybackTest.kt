@@ -103,33 +103,9 @@ class MixedMediaPlaybackTest {
         
         Log.d(TAG, "=== Starting mixed media display test ===")
         
-        // Try to fetch from Supabase with fast timeout
-        // If unavailable, use TestMediaRepository for deterministic testing
-        val playlist = try {
-            val isAvailable = checkSupabaseAvailable()
-            if (isAvailable) {
-                // Use Supabase if available
-                repository.fetchPlaylist(screenId ?: "", null, null)
-                delay(1500) // Reduced from 2000ms for faster execution
-                
-                val state = repository.playlistState.first()
-                if (state is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready) {
-                    state.playlist
-                } else {
-                    // Fall back to TestMediaRepository if Supabase playlist not ready
-                    Log.d(TAG, "Supabase playlist not ready, using TestMediaRepository")
-                    TestMediaRepository.getMixedMediaPlaylist()
-                }
-            } else {
-                // Use TestMediaRepository if Supabase unavailable
-                Log.d(TAG, "Supabase unavailable, using TestMediaRepository for fast execution")
-                TestMediaRepository.getMixedMediaPlaylist()
-            }
-        } catch (e: Exception) {
-            // Fall back to TestMediaRepository on any error
-            Log.d(TAG, "Error fetching from Supabase, using TestMediaRepository: ${e.message}")
-            TestMediaRepository.getMixedMediaPlaylist()
-        }
+        // ALWAYS use TestMediaRepository for deterministic testing
+        val playlist = TestMediaRepository.getMixedMediaPlaylist()
+        Log.d(TAG, "Using TestMediaRepository for deterministic testing")
         
         // Process playlist to separate supported types
         val processed = PlaylistProcessor.processPlaylist(playlist)
@@ -192,38 +168,11 @@ class MixedMediaPlaybackTest {
     @Test
     fun imagesAreNotSkippedInMixedPlaylists() {
         runBlocking {
-        val screenId = preferences.screenId.first()
-        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
-        
         Log.d(TAG, "=== Starting image skip detection test ===")
         
-        // Try to fetch from Supabase with fast timeout
-        // If unavailable, use TestMediaRepository for deterministic testing
-        val playlist = try {
-            val isAvailable = checkSupabaseAvailable()
-            if (isAvailable) {
-                // Use Supabase if available
-                repository.fetchPlaylist(screenId ?: "", null, null)
-                delay(1500) // Reduced from 2000ms for faster execution
-                
-                val state = repository.playlistState.first()
-                if (state is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready) {
-                    state.playlist
-                } else {
-                    // Fall back to TestMediaRepository if Supabase playlist not ready
-                    Log.d(TAG, "Supabase playlist not ready, using TestMediaRepository")
-                    TestMediaRepository.getMixedMediaPlaylist()
-                }
-            } else {
-                // Use TestMediaRepository if Supabase unavailable
-                Log.d(TAG, "Supabase unavailable, using TestMediaRepository for fast execution")
-                TestMediaRepository.getMixedMediaPlaylist()
-            }
-        } catch (e: Exception) {
-            // Fall back to TestMediaRepository on any error
-            Log.d(TAG, "Error fetching from Supabase, using TestMediaRepository: ${e.message}")
-            TestMediaRepository.getMixedMediaPlaylist()
-        }
+        // ALWAYS use TestMediaRepository for deterministic testing
+        val playlist = TestMediaRepository.getMixedMediaPlaylist()
+        Log.d(TAG, "Using TestMediaRepository for deterministic testing")
         
         // Find all images in original playlist
         val originalImages = playlist.videos.filter { video ->
@@ -288,38 +237,11 @@ class MixedMediaPlaybackTest {
     @Test
     fun differentMediaOrderSequencesWorkCorrectly() {
         runBlocking {
-        val screenId = preferences.screenId.first()
-        org.junit.Assume.assumeNotNull("Screen ID must be set", screenId)
-        
         Log.d(TAG, "=== Starting media order sequence test ===")
         
-        // Try to fetch from Supabase with fast timeout
-        // If unavailable, use TestMediaRepository for deterministic testing
-        val playlist = try {
-            val isAvailable = checkSupabaseAvailable()
-            if (isAvailable) {
-                // Use Supabase if available
-                repository.fetchPlaylist(screenId ?: "", null, null)
-                delay(1500) // Reduced from 2000ms for faster execution
-                
-                val state = repository.playlistState.first()
-                if (state is com.example.signoutwardv2.data.PlaybackRepository.PlaylistLoadState.Ready) {
-                    state.playlist
-                } else {
-                    // Fall back to TestMediaRepository if Supabase playlist not ready
-                    Log.d(TAG, "Supabase playlist not ready, using TestMediaRepository")
-                    TestMediaRepository.getMixedMediaPlaylist()
-                }
-            } else {
-                // Use TestMediaRepository if Supabase unavailable
-                Log.d(TAG, "Supabase unavailable, using TestMediaRepository for fast execution")
-                TestMediaRepository.getMixedMediaPlaylist()
-            }
-        } catch (e: Exception) {
-            // Fall back to TestMediaRepository on any error
-            Log.d(TAG, "Error fetching from Supabase, using TestMediaRepository: ${e.message}")
-            TestMediaRepository.getMixedMediaPlaylist()
-        }
+        // ALWAYS use TestMediaRepository for deterministic testing
+        val playlist = TestMediaRepository.getMixedMediaPlaylist()
+        Log.d(TAG, "Using TestMediaRepository for deterministic testing")
         
         val processed = PlaylistProcessor.processPlaylist(playlist)
         
