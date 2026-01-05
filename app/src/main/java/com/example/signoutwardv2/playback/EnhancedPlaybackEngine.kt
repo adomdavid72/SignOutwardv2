@@ -201,13 +201,14 @@ class EnhancedPlaybackEngine(
         return ExoPlayer.Builder(context)
             .build()
             .apply {
-                // Optimize playback settings
-                repeatMode = Player.REPEAT_MODE_ALL
-                playWhenReady = true
+                // CRITICAL: REPEAT_MODE_OFF to prevent infinite looping
+                // Playlist advancement is handled by state machine, not ExoPlayer
+                repeatMode = Player.REPEAT_MODE_OFF
+                playWhenReady = false // Will be set to true when video starts
                 
                 // Media3 automatically optimizes buffering
                 // No need for explicit buffer configuration
-                Log.d(TAG, "Created optimized ExoPlayer with default buffering settings")
+                Log.d(TAG, "Created optimized ExoPlayer with REPEAT_MODE_OFF")
             }
     }
     

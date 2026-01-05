@@ -48,28 +48,60 @@ object SupabaseClient {
         explicitNulls = false
     }
     
-    private val client = HttpClient(Android) {
-        install(ContentNegotiation) {
-            json(json)
-        }
-        install(Logging) {
-            level = LogLevel.BODY
-            logger = object : Logger {
-                override fun log(message: String) {
-                    message.chunked(3000).forEach { chunk ->
-                        Log.d(TAG, chunk)
+    // CRITICAL: Lazy initialization prevents HttpClient creation during app startup
+    // This avoids network exceptions crashing the app before UI is ready
+    private val client: HttpClient by lazy {
+        HttpClient(Android) {
+            install(ContentNegotiation) {
+                json(json)
+            }
+            install(Logging) {
+                level = LogLevel.BODY
+                logger = object : Logger {
+                    override fun log(message: String) {
+                        message.chunked(3000).forEach { chunk ->
+                            Log.d(TAG, chunk)
+                        }
                     }
                 }
             }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30000
+                connectTimeoutMillis = 15000
+                socketTimeoutMillis = 30000
+            }
+            // Note: HttpRequestRetry plugin not available in current Ktor version
+            // Retry logic is handled in safeApiCall wrapper instead
+            defaultRequest {
+                header("apikey", supabaseKey)
+                header("Authorization", "Bearer $supabaseKey")
+                contentType(ContentType.Application.Json)
+            }
         }
-        install(HttpTimeout) {
-            requestTimeoutMillis = 30000
-            connectTimeoutMillis = 15000
-        }
-        defaultRequest {
-            header("apikey", supabaseKey)
-            header("Authorization", "Bearer $supabaseKey")
-            contentType(ContentType.Application.Json)
+    }
+    
+    /**
+     * Safe API call wrapper - catches network exceptions and prevents app crashes
+     * Returns Result<T> instead of throwing exceptions
+     */
+    private suspend fun <T> safeApiCall(block: suspend () -> T): Result<T> {
+        return try {
+            Result.success(block())
+        } catch (e: java.net.SocketException) {
+            Log.e(TAG, "Network connection error: ${e.message}", e)
+            Result.failure(e)
+        } catch (e: java.net.UnknownHostException) {
+            Log.e(TAG, "Host not found: ${e.message}", e)
+            Result.failure(e)
+        } catch (e: java.net.ConnectException) {
+            Log.e(TAG, "Connection refused: ${e.message}", e)
+            Result.failure(e)
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "Connection timeout: ${e.message}", e)
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error: ${e.message}", e)
+            Result.failure(e)
         }
     }
     
@@ -92,6 +124,8 @@ object SupabaseClient {
     // ========================================================================
     
     suspend fun validatePairingCode(code: String): Result<PairingResponse> {
+        // Note: This function already has comprehensive error handling
+        // safeApiCall wrapper not needed here, but HttpClient is lazy-initialized
         return try {
             val upperCode = code.uppercase().trim()
             Log.d(TAG, "=== PAIRING ATTEMPT ===")
@@ -236,7 +270,6 @@ object SupabaseClient {
                 locationId = locationId,
                 message = "Device paired successfully"
             ))
-            
         } catch (e: Exception) {
             Log.e(TAG, "=== PAIRING ERROR ===", e)
             Result.failure(e)

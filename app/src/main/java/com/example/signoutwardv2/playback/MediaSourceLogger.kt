@@ -165,5 +165,35 @@ object MediaSourceLogger {
             else -> SourceType.REMOTE // Default to remote for unknown schemes
         }
     }
+    
+    /**
+     * Log summary of all playback items and their sources
+     * Useful for validating that all items are using local/cached files
+     */
+    fun logPlaybackSourceSummary(items: List<com.example.signoutwardv2.playback.EnhancedPlaybackEngine.EnhancedPlaybackItem>) {
+        Log.d(TAG, "=== PLAYBACK SOURCE SUMMARY ===")
+        Log.d(TAG, "Total items: ${items.size}")
+        
+        val sourceCounts = items.groupingBy { it.sourceType }.eachCount()
+        sourceCounts.forEach { (sourceType, count) ->
+            Log.d(TAG, "  $sourceType: $count items")
+        }
+        
+        val localCount = items.count { it.sourceType == SourceType.LOCAL || it.sourceType == SourceType.CACHE }
+        val remoteCount = items.count { it.sourceType == SourceType.REMOTE }
+        
+        Log.d(TAG, "Local/Cached: $localCount | Remote: $remoteCount")
+        
+        if (remoteCount > 0) {
+            Log.w(TAG, "WARNING: $remoteCount items are still using remote sources (not cached)")
+            items.filter { it.sourceType == SourceType.REMOTE }.forEach { item ->
+                Log.w(TAG, "  - ${item.video.id} (${item.mediaType.name}): ${item.playbackUri.take(80)}")
+            }
+        } else {
+            Log.d(TAG, "✓ All items are using local/cached files")
+        }
+        
+        Log.d(TAG, "=== END SOURCE SUMMARY ===")
+    }
 }
 

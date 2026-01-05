@@ -49,28 +49,36 @@ fun AppNavigation(
     var pairingChecked by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
-        // Check if device is already paired
-        val isPaired = pairingManager.isPaired()
-        
-        if (isPaired) {
-            // Device is already paired - skip pairing and go directly to playback
-            val screenId = pairingManager.getScreenId()
-            Log.d("AppNavigation", "Device already paired - screenId: $screenId")
-            Log.d("AppNavigation", "Skipping pairing workflow - navigating directly to playback")
+        try {
+            // Check if device is already paired
+            // CRITICAL: Wrap in try-catch to prevent crashes from DataStore exceptions
+            val isPaired = pairingManager.isPaired()
             
-            // Navigate to playback screen
-            navController.navigate(
-                Screen.AdStreaming.createRoute(screenId)
-            ) {
-                // Clear back stack so user can't go back to pairing
-                popUpTo(0) { inclusive = true }
+            if (isPaired) {
+                // Device is already paired - skip pairing and go directly to playback
+                val screenId = pairingManager.getScreenId()
+                Log.d("AppNavigation", "Device already paired - screenId: $screenId")
+                Log.d("AppNavigation", "Skipping pairing workflow - navigating directly to playback")
+                
+                // Navigate to playback screen
+                navController.navigate(
+                    Screen.AdStreaming.createRoute(screenId)
+                ) {
+                    // Clear back stack so user can't go back to pairing
+                    popUpTo(0) { inclusive = true }
+                }
+            } else {
+                // Device not paired - show pairing screen
+                Log.d("AppNavigation", "Device not paired - showing pairing screen")
             }
-        } else {
-            // Device not paired - show pairing screen
-            Log.d("AppNavigation", "Device not paired - showing pairing screen")
+        } catch (e: Exception) {
+            // CRITICAL: Catch all exceptions to prevent app crash on startup
+            // If pairing check fails, show pairing screen as fallback
+            Log.e("AppNavigation", "Error checking pairing state: ${e.message}", e)
+            // Don't navigate - let default startDestination (Pairing) handle it
+        } finally {
+            pairingChecked = true
         }
-        
-        pairingChecked = true
     }
     
     NavHost(

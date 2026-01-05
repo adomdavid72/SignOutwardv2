@@ -108,16 +108,30 @@ fun AdStreamingScreen(
     }
     
     // Get screen ID and start services
+    // CRITICAL: Wrap network calls in try-catch to prevent crashes
     LaunchedEffect(Unit) {
-        val resolvedScreenId = screenId ?: preferences.screenId.first()
-        currentScreenId = resolvedScreenId
-        groupId = preferences.groupId.first()
-        locationId = preferences.locationId.first()
-        
-        resolvedScreenId?.let { id ->
-            repository.fetchPlaylist(id, groupId, locationId)
-            // Start playlist sync manager (2-minute interval)
-            syncManager?.startPeriodicSync(groupId, locationId)
+        try {
+            val resolvedScreenId = screenId ?: preferences.screenId.first()
+            currentScreenId = resolvedScreenId
+            groupId = preferences.groupId.first()
+            locationId = preferences.locationId.first()
+            
+            resolvedScreenId?.let { id ->
+                // Wrap fetchPlaylist in try-catch to handle network errors gracefully
+                try {
+                    repository.fetchPlaylist(id, groupId, locationId)
+                    // Start playlist sync manager (2-minute interval)
+                    syncManager?.startPeriodicSync(groupId, locationId)
+                } catch (e: Exception) {
+                    // Network error - app will show error state UI, but won't crash
+                    Log.e("AdStreamingScreen", "Error fetching playlist: ${e.message}", e)
+                    // Repository will set error state, UI will handle it
+                }
+            }
+        } catch (e: Exception) {
+            // DataStore or other initialization error - log but don't crash
+            Log.e("AdStreamingScreen", "Error initializing screen: ${e.message}", e)
+            // App will show default/error state, but remains functional
         }
     }
     
@@ -494,8 +508,8 @@ private fun DownloadFirstMediaPlayer(
                 )
             }
         } else {
-            // Use enhanced media player with optimized playback and source logging
-            EnhancedMediaPlayer(
+            // Use mixed media player with strict state machine for video/image separation
+            MixedMediaPlayer(
                 playbackItems = items,
                 unsupportedVideos = unsupportedVideos,
                 screenId = screenId,
